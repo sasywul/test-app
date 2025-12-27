@@ -62,7 +62,14 @@ bot.command("nilai", async ctx => {
     const html = await fetchDaftarNilaiWithLogin(nim, password);
     const hasil = parseDaftarNilai(html);
 
-          console.log(`✅ LOGIN OK | ${nim} | ${hasil.nama}`);
+console.log("────────────────────────────");
+console.log("[TELEGRAM BOT] Login berhasil");
+console.log(`Nama : ${result.nama}`);
+console.log(`NIM  : ${result.nim}`);
+console.log(`IPK  : ${result.ipk}`);
+console.log(`Total MK : ${result.total_makul}`);
+console.log("────────────────────────────");
+
     /* === FORMAT TELEGRAM === */
     let message =
       `👤 *${escapeMD(hasil.nama)}*\n` +
