@@ -1,117 +1,103 @@
 require("dotenv").config();
 const { Telegraf } = require("telegraf");
-const {
-  fetchDaftarNilaiWithLogin
-} = require("./simaClient");
+
+const { fetchDaftarNilaiWithLogin } = require("./simaClient");
 const parseDaftarNilai = require("./parseDaftarNilai");
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-/* =========================
-   UTIL: ESCAPE MARKDOWN
-========================= */
-function escapeMD(text = "") {
-  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, "\\$&");
-}
+console.log("🤖 Bot SIMA berjalan...");
 
 /* =========================
    UTIL: SPLIT MESSAGE
 ========================= */
-async function sendLongMessage(ctx, text) {
-  const MAX = 3900;
-  let chunk = "";
+function splitMessage(text, maxLength = 3900) {
+  const parts = [];
+  let current = "";
 
   for (const line of text.split("\n")) {
-    if ((chunk + line).length > MAX) {
-      await ctx.reply(chunk, { parse_mode: "Markdown" });
-      chunk = "";
+    if ((current + line + "\n").length > maxLength) {
+      parts.push(current);
+      current = "";
     }
-    chunk += line + "\n";
+    current += line + "\n";
   }
 
-  if (chunk.trim()) {
-    await ctx.reply(chunk, { parse_mode: "Markdown" });
-  }
+  if (current) parts.push(current);
+  return parts;
 }
 
 /* =========================
    COMMAND /nilai
 ========================= */
 bot.command("nilai", async ctx => {
-  const args = ctx.message.text.split(" ");
+  const [, nim, password] = ctx.message.text.split(" ");
 
-  if (args.length < 3) {
-    return ctx.reply(
-      "❗ Format salah\n\n" +
-      "Gunakan:\n" +
-      "`/nilai NIM PASSWORD`\n\n" +
-      "Contoh:\n" +
-      "`/nilai G.111.24.0021 12345678`",
-      { parse_mode: "Markdown" }
-    );
+  if (!nim || !password) {
+    return ctx.reply("❌ Format salah.\nGunakan:\n/nilai NIM PASSWORD");
   }
-
-  const nim = args[1];
-  const password = args.slice(2).join(" ");
-
-  await ctx.reply("⏳ Mengambil data nilai, mohon tunggu...");
 
   try {
-    /* === FETCH & PARSE === */
+    await ctx.reply("⏳ Mengambil data nilai, mohon tunggu...");
 
+    // =========================
+    // FETCH HTML SIMA
+    // =========================
     const html = await fetchDaftarNilaiWithLogin(nim, password);
-    const hasil = parseDaftarNilai(html);
 
-console.log("────────────────────────────");
-console.log("[TELEGRAM BOT] Login berhasil");
-console.log(`Nama : ${result.nama}`);
-console.log(`NIM  : ${result.nim}`);
-console.log(`IPK  : ${result.ipk}`);
-console.log(`Total MK : ${result.total_makul}`);
-console.log("────────────────────────────");
+    // =========================
+    // PARSE HTML → JSON
+    // =========================
+    const result = parseDaftarNilai(html);
 
-    /* === FORMAT TELEGRAM === */
-    let message =
-      `👤 *${escapeMD(hasil.nama)}*\n` +
-      `📊 *IPK:* ${hasil.ipk}\n` +
-      `📚 *Total Mata Kuliah:* ${hasil.total_makul}\n\n` +
-      `━━━━━━━━━━━━━━━━━━━\n`;
+    if (!result || !result.nama || !result.data?.length) {
+      throw new Error("Parsing gagal");
+    }
 
-    hasil.data.forEach((m, i) => {
-      message +=
-        `${i + 1}. *${escapeMD(m.matkul)}*\n` +
-        `   • Kode: ${escapeMD(m.kode)}\n` +
-        `   • Semester: ${m.semester}\n` +
-        `   • SKS: ${m.sks}\n` +
-        `   • Nilai: ${escapeMD(m.nilai || "-")}\n\n`;
+    // =========================
+    // LOG KE TERMINAL (SESUSAI REQUEST)
+    // =========================
+    console.log(`✅ LOGIN OK | ${result.nama} | ${nim}`);
+
+    // =========================
+    // FORMAT MESSAGE TELEGRAM
+    // =========================
+    let message = `👤 *${result.nama}*\n`;
+    message += `📊 *IPK:* ${result.ipk}\n`;
+    message += `📚 *Total MK:* ${result.total_makul}\n\n`;
+    message += `━━━━━━━━━━━━━━━━━━\n`;
+
+    result.data.forEach((m, i) => {
+      message += `${i + 1}. *${m.matkul}*\n`;
+      message += `   • Semester: ${m.semester}\n`;
+      message += `   • SKS: ${m.sks}\n`;
+      message += `   • Nilai: ${m.nilai}\n`;
+      message += `   • Mutu: ${m.mutu}\n\n`;
     });
 
-    await sendLongMessage(ctx, message);
+    // =========================
+    // KIRIM (ANTI MESSAGE TOO LONG)
+    // =========================
+    const chunks = splitMessage(message);
+
+    for (const chunk of chunks) {
+      await ctx.reply(chunk, { parse_mode: "Markdown" });
+    }
 
   } catch (err) {
-  console.error("[BOT ERROR]", err.message);
+    console.error(`[BOT ERROR] | ${nim} |`, err.message);
 
-  if (err.code === "LOGIN_FAILED" || err.message.includes("Login")) {
-    await ctx.reply("❌ Login gagal.\nPastikan NIM & password benar.");
-    return;
+    await ctx.reply(
+      "❌ Gagal mengambil nilai.\n" +
+      "Pastikan NIM & password benar."
+    );
   }
-
-  if (err.message.includes("Session")) {
-    await ctx.reply("⚠️ Session tidak valid. Silakan coba lagi.");
-    return;
-  }
-
-  await ctx.reply(
-    "⚠️ Data berhasil diambil, tetapi gagal ditampilkan.\nSilakan coba lagi."
-  );
-}
 });
 
 /* =========================
    START BOT
 ========================= */
 bot.launch();
-console.log("🤖 Bot SIMA berjalan...");
 
 /* =========================
    GRACEFUL SHUTDOWN
