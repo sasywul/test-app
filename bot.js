@@ -89,24 +89,22 @@ console.log("──────────────────────�
     await sendLongMessage(ctx, message);
 
   } catch (err) {
-  console.log(`❌ LOGIN GAGAL | ${nim}`);
+  console.error("[BOT ERROR]", err.message);
 
-    if (
-      err.message.includes("Login gagal") ||
-      err.message.includes("Token") ||
-      err.message.includes("Session")
-    ) {
-      await ctx.reply(
-        "❌ Login gagal.\n" +
-        "Pastikan NIM & password benar."
-      );
-    } else {
-      await ctx.reply(
-        "⚠️ Data berhasil diambil, tetapi gagal ditampilkan.\n" +
-        "Silakan coba lagi."
-      );
-    }
+  if (err.code === "LOGIN_FAILED" || err.message.includes("Login")) {
+    await ctx.reply("❌ Login gagal.\nPastikan NIM & password benar.");
+    return;
   }
+
+  if (err.message.includes("Session")) {
+    await ctx.reply("⚠️ Session tidak valid. Silakan coba lagi.");
+    return;
+  }
+
+  await ctx.reply(
+    "⚠️ Data berhasil diambil, tetapi gagal ditampilkan.\nSilakan coba lagi."
+  );
+}
 });
 
 /* =========================
