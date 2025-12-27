@@ -2,28 +2,21 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const { CookieJar } = require("tough-cookie");
 const { wrapper } = require("axios-cookiejar-support");
-const HttpsProxyAgent = require("https-proxy-agent");
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
-// 🔐 ZenRows Proxy
-const PROXY = `http://${process.env.ZENROWS_API_KEY}:@api.zenrows.com:8001`;
-
+/* =========================
+   CLIENT
+========================= */
 function createClient() {
   const jar = new CookieJar();
-  const agent = new HttpsProxyAgent(PROXY);
 
   return wrapper(
     axios.create({
       jar,
       withCredentials: true,
-      httpsAgent: agent,
-      httpAgent: agent,
       timeout: 30000,
-      maxRedirects: 5,
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
         "Accept":
           "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8",
@@ -38,7 +31,7 @@ function createClient() {
    LOGIN
 ========================= */
 async function loginSIMA(client, nim, password) {
-  console.log(`🔹 GET login page | ${nim}`);
+  console.log(`🔹 GET halaman login | ${nim}`);
 
   const loginPage = await client.get("https://sima.usm.ac.id/");
   const $ = cheerio.load(loginPage.data);
@@ -54,19 +47,19 @@ async function loginSIMA(client, nim, password) {
       username: nim,
       password,
       token
-    }).toString(),
+    }),
     {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       maxRedirects: 0,
       validateStatus: s => s < 500
     }
   );
 
-  if (!res.headers.location?.includes("/app")) {
+  const redirect = res.headers.location;
+  if (!redirect || !redirect.includes("/app")) {
     throw new Error("Login gagal");
   }
 
-  console.log(`✅ Login sukses | ${nim}`);
+  console.log(`✅ Login berhasil | ${nim}`);
 }
 
 /* =========================
@@ -81,10 +74,7 @@ async function activateAkademik(client) {
       id_aplikasi: "05494017904153",
       level_key: "6f1e80f8-4fb3-11ea-9ef2-1cb72c27dd68",
       id_bidang: "1"
-    }).toString(),
-    {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" }
-    }
+    })
   );
 
   console.log("✅ Sistem Akademik aktif");
@@ -99,7 +89,7 @@ async function fetchDaftarNilai(client) {
   );
 
   if (res.request.res.responseUrl.includes("/login")) {
-    throw new Error("Session tidak valid");
+    throw new Error("Session invalid");
   }
 
   return res.data;
@@ -110,8 +100,10 @@ async function fetchDaftarNilai(client) {
 ========================= */
 async function fetchDaftarNilaiWithLogin(nim, password) {
   const client = createClient();
+
   await loginSIMA(client, nim, password);
   await activateAkademik(client);
+
   return fetchDaftarNilai(client);
 }
 
